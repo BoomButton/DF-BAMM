@@ -1,0 +1,101 @@
+'''
+Created on May 21, 2015
+
+@author: Button
+'''
+
+from src.bamm.common import config
+import os
+
+ascii_codes = None
+
+def _load_ascii_conversions(ascii_file):
+    """Load ASCII conversions from file.
+    
+    The file is structured as a .property file, with a new conversion on each line.
+    
+    Each line of the file should be in the format " '%'=# ", where % is a single character, and # is the character's position on code page 437 (the basis of the Dwarf Fortress tileset).
+    
+    Comments are not allowed in this file.
+    
+    These conversions will later be used by the function escape_problematic_literals.
+    """
+    global ascii_codes
+    verbose = config.properties[config.DEBUG][1]
+    if verbose:
+        print("Loading ASCII conversions...")
+    if ascii_codes is None:
+        ascii_codes = {}
+    if ascii_file is None:
+        print("Undefined ascii conversion file. Please add an 'ascii' property in",config.runconfig,".")
+    else:
+        for line in open(ascii_file):
+            real_line = line.strip()
+            if len(real_line) == 0:
+                continue
+            elif '=' not in real_line:
+                if verbose:
+                    print('ASCII conversion file contains the improperly-formatted line ',real_line,'.')
+            else:
+                point = real_line.rindex('=')
+                if real_line[:point] in ascii_codes.keys():
+                    if verbose:
+                        print('Duplicate entry for ascii replacement ',real_line[:point])
+                else:
+                    ascii_codes[real_line[:point]] = real_line[point+1:]
+        if verbose:
+            print("ASCII conversions loaded.")
+            
+def tags(line):
+    """Return an ordered list of all the tags in this line, without brackets, with literals escaped if necessary."""
+    processed_line = escape_problematic_literals(line)
+    to_return = []        # list of strings, a la split()
+    while '[' in processed_line and ']' in processed_line and processed_line.index('[') < processed_line.rindex(']'):
+        if processed_line.index(']') < processed_line.index('['):
+            processed_line = processed_line[processed_line.index('['):]
+        to_return.append(processed_line[processed_line.index('[')+1:processed_line.index(']')])
+        processed_line = processed_line[processed_line.index(']')+1:]
+    return to_return
+            
+def escape_problematic_literals(rawline):
+    global ascii_codes
+
+    line = rawline#.strip()
+    # Replace literal key characters with number codes
+    # Literal colons are going to require some special processing, because of the following case:  GROWTH:'r':'x': etc. That's why we can't just use a blind replaceAll.
+    bracketscount = 0        # If odd, we are inside a tag. If even, we are outside a tag.
+    count = 0                # Where we are in the string
+    quotescount = 0
+    while count < len(line)-2:
+        # Going from inside a tag to outside or vice versa
+        if (bracketscount%2 == 0 and line[count] == "[") or (bracketscount%2 == 1 and line[count] == "]"):
+            bracketscount += 1
+        # We are inside a tag and we have discovered a ' character beginning a literal value, with another 2 characters down on the other side.
+        elif quotescount%2 == 0 and bracketscount%2 == 1 and line[count:count+3] in ascii_codes.keys():
+            # If the character could be a problem for later processing, replace it with its ascii code.
+            #TODO rejigger this syntax
+            line = line[:count] + ascii_codes[line[count:count+3]] + line[count+3:]
+        elif line[count] == "'":
+            quotescount += 1
+        elif bracketscount%2 == 1 and line[count] == ':':
+            quotescount = 0
+        count += 1    
+    # line has now had its literal "use this tile" versions of its special characters replaced with their numbers.
+    return line
+
+def path_compatible(full_path,allowed_paths):
+    """Return True if full_path regex matches anything in allowed_paths, or False otherwise."""
+    # TODO use regexes
+    to_return = True
+    full_path = full_path.replace("/",os.pathsep)
+    full_path_tokens = full_path.split(os.pathsep)
+    for possible_path in allowed_paths:
+        possibility = possible_path.split('/')
+        match_tuples = []
+        for ii in range(0,len(possibility)):
+            if possibility[ii] == '*':
+                continue
+            elif possibility[ii] not in full_path_tokens[ii:]:
+                break
+            else:
+                match_tuples.append((ii,full_path_tokens[ii:].index(possibility[ii])))
