@@ -63,14 +63,10 @@ def write_modified_raws(graphics_to_apply, raws_sourcedir, outputdir):
             if parsing.path_compatible(targetpath,properties[config.GRAPHICS_OVERWRITE_LIST][1:]):
                 if verbose:
                     print("Skipping",file,": graphics overwrite TBI.")
-                pass
-            elif parsing.path_compatible(targetpath,properties[config.GRAPHICS_IGNORE_LIST][1:]):
+                
+            elif parsing.path_compatible(targetpath,properties[config.GRAPHICS_IGNORE_LIST][1:]) or file not in graphics_to_apply.keys():
                 if verbose:
-                    print("Skipping",file,": graphics ignore TBI.")
-                pass
-            elif file not in graphics_to_apply.keys():
-                if verbose:
-                    print("No graphics to apply to",file,". Copying from target source...")
+                    print("Copying",file,"from target source...")
                 targetpath = shutil.copyfile(os.path.join(root,file),targetpath)
                 if verbose:
                     print(file,"copied.")
@@ -205,13 +201,6 @@ def bind_graphics_to_targets(graphics_nodes,targets_nodes):
     if verbose:
         print("Tag binding complete.")
     return to_return
-
-
-
-
-
-
-                
 
 class TreeNode():
     """Parent class for the other Node classes.

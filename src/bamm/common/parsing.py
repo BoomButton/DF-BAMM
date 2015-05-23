@@ -6,6 +6,7 @@ Created on May 21, 2015
 
 from src.bamm.common import config
 import os
+import re
 
 ascii_codes = None
 
@@ -86,16 +87,10 @@ def escape_problematic_literals(rawline):
 def path_compatible(full_path,allowed_paths):
     """Return True if full_path regex matches anything in allowed_paths, or False otherwise."""
     # TODO use regexes
-    to_return = True
-    full_path = full_path.replace("/",os.pathsep)
-    full_path_tokens = full_path.split(os.pathsep)
-    for possible_path in allowed_paths:
-        possibility = possible_path.split('/')
-        match_tuples = []
-        for ii in range(0,len(possibility)):
-            if possibility[ii] == '*':
-                continue
-            elif possibility[ii] not in full_path_tokens[ii:]:
-                break
-            else:
-                match_tuples.append((ii,full_path_tokens[ii:].index(possibility[ii])))
+    full_path = full_path.replace('\\','/')
+    for allowed_path in allowed_paths:
+        allowed_path = allowed_path.replace('\\','/')
+        match = re.match(allowed_path,full_path)
+        if match is not None:
+            return True
+    return False
