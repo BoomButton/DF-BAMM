@@ -60,16 +60,15 @@ def write_modified_raws(graphics_to_apply, raws_sourcedir, outputdir):
         for file in files:
             targetpath = os.path.join(root,file)
             targetpath = outputdir + targetpath[len(raws_sourcedir):]
-            if parsing.path_compatible(targetpath,properties[config.GRAPHICS_OVERWRITE_LIST][1:]):
-                if verbose:
-                    print("Skipping",file,": graphics overwrite TBI.")
-                
-            elif parsing.path_compatible(targetpath,properties[config.GRAPHICS_IGNORE_LIST][1:]) or file not in graphics_to_apply.keys():
+            if parsing.path_compatible(targetpath,properties[config.GRAPHICS_IGNORE_LIST][1:]) or file not in graphics_to_apply.keys():
                 if verbose:
                     print("Copying",file,"from target source...")
                 targetpath = shutil.copyfile(os.path.join(root,file),targetpath)
                 if verbose:
                     print(file,"copied.")
+            # TODO: Need to implement graphics overwrites
+            elif parsing.path_compatible(targetpath,properties[config.GRAPHICS_OVERWRITE_LIST][1:]):
+                pass
             else:
                 if verbose:
                     print("Merging graphics into",file,"...")
@@ -78,6 +77,7 @@ def write_modified_raws(graphics_to_apply, raws_sourcedir, outputdir):
                 targetfile = open(targetpath,'wt',encoding='cp437')
                 sourcefile = open(os.path.join(root,file),'rt',encoding='cp437')
                 linecount = 0
+                tags_to_reset_addl = []
                 for line in sourcefile:
                     linecount = linecount + 1
                     modified_line = parsing.escape_problematic_literals(line)
@@ -107,6 +107,7 @@ def write_modified_raws(graphics_to_apply, raws_sourcedir, outputdir):
                                     modified_line = modified_line.replace(to_remove,"")
                                 #modified_line = modified_line[:-1] + " (BAMM)\n"
                             additional.extend(matching_node.pop_addl())
+                            tags_to_reset_addl.append(matching_node)
                     
                     targetfile.writelines(modified_line)
                     for tag_node in additional:
@@ -121,8 +122,23 @@ def write_modified_raws(graphics_to_apply, raws_sourcedir, outputdir):
                     print("Finished outputting",file,".")
                 targetfile.close()
                 sourcefile.close()
+                # Resetting the additional tags for another 
+                for node in tags_to_reset_addl:
+                    node.reset_addl()
+                
     if verbose:
         print("All files written.")
+        
+def copy_graphics_overrides(graphics_directory, output_directory):
+    verbose = config.properties[config.DEBUG][1]
+    properties = config.properties
+    if verbose:
+        print("Writing graphics override files")
+    for root, dirs, files in os.walk(graphics_directory):
+        for file in files:
+            filepath = os.path.join(root,file)
+            
+        
 
 def walk_rawfiles_into_tagnode_collection(directory):
     """Load the graphics-relevant content of raw files into memory.
@@ -228,7 +244,7 @@ class TreeNode():
         matching_node = None
         out_of_parents = False
         while matching_node == None and not out_of_parents:
-            #matching_node = curr_node.get_template_match(tag)[0]
+            #matching_node = curr_node.get_template_match(tag)
             #if matching_node == None:
             matching_node = curr_node.get_child(tag)
             if curr_node._parent == None:
@@ -271,6 +287,9 @@ class TemplateNode(TreeNode):
             self._tag = string
 
             parent.add_child(self)
+            
+    def is_graphics_tag(self):
+        return '$' not in self._tag and '&' not in self._tag and self._is_graphics_tag
 
     def add_child(self, node):
         if node._tag in self._children.keys():
@@ -294,9 +313,9 @@ class TemplateNode(TreeNode):
                 for child in self._childref[first_token]:
                     return_node = child.get_template_match(tag)
                     if return_node != None:
-                        return_possibilities.append(child)
+                        return_possibilities.append((child,return_node))
                 if len(return_possibilities) == 1:
-                    return return_possibilities[0]
+                    return return_possibilities[0][0]
                 elif len(return_possibilities) == 0:
                     return None
                 else:
@@ -304,8 +323,10 @@ class TemplateNode(TreeNode):
                     if verbose:
                         print("Found more than one matching child. Matching children are:")
                         for poss in return_possibilities:
-                            print(poss)
-                    return return_possibilities[0]
+                            print(poss[1])
+                    possible_tags = [a[1] for a in return_possibilities]
+                    winner = TemplateNode._get_best_match(possible_tags)
+                    return return_possibilities[possible_tags.index(winner)][0]
             else:
                 return None
 
@@ -319,12 +340,17 @@ class TemplateNode(TreeNode):
         candidate_tokens = tag_to_compare.split(':')
 
         ii = 0
-        while ii < len(candidate_tokens) and len(template_token_bag) > 0:
+        # TODO: Need to check more than just the first tag in the bag's length
+        while len(template_token_bag) > 0 and (ii < len(candidate_tokens) or ii < len(template_token_bag[0])):
             good_to_go = False
             for var in template_token_bag:
-                if ii >= len(var):
+                if ii < len(candidate_tokens) and ii >= len(var):
                     template_token_bag.remove(var)
-                elif '&' == var[ii] or '?' == var[ii] or '$' == var[ii] or var[ii] == candidate_tokens[ii]:
+                elif ii >= len(var) and len(var) == len(candidate_tokens):
+                    good_to_go = True
+                elif ii >= len(candidate_tokens) and (ii >= len(var) or (ii < len(var) and not '(0,' in var[ii])):
+                    template_token_bag.remove(var)
+                elif '&' == var[ii] or '?' == var[ii] or '$' == var[ii] or (ii < len(candidate_tokens) and var[ii] == candidate_tokens[ii]):
                     # This case is an auto-pass
                     good_to_go = True
                 else:
@@ -352,20 +378,45 @@ class TemplateNode(TreeNode):
                 ii += 1
         for tag in template_token_bag:
             if len(tag) != len(candidate_tokens):
-                template_token_bag.remove(tag)
+                template_token_bag.remove(tag)  # This isn't working properly?
+                
         if len(template_token_bag) == 0:
             return None
         elif len(template_token_bag) == 1:
-            return template_token_bag
+            if len(template_token_bag[0]) != len(candidate_tokens):
+                print("debug")
+            return template_token_bag[0]
         else:
             # TODO error handling
 # TODO plant GROWTH_PRINTs are throwing this when they end and there are templates of size n and n+1, fix that up plz
+            highest_priority = TemplateNode._get_best_match(template_token_bag)
             if verbose:
                 print("More than one template matched.\nTag:",tag_to_compare,"Matches:")
                 for template in template_token_bag:
                     print(template)
+                print("The highest-priority match is",highest_priority)
             # Technically this does in fact have a matching template
-            return template_token_bag
+            return highest_priority
+        
+    @staticmethod
+    def _get_best_match(template_tokens_bag):
+        if not template_tokens_bag:        # empty bag returns false
+            return None
+        elif len(template_tokens_bag) == 1:
+            return template_tokens_bag[0]
+        else:
+            best_currently = template_tokens_bag[0]
+            best_tokens = 0
+            for tag in template_tokens_bag:
+                challenger_tokens = 0
+                for token in tag:
+                    if token != '?' and token != '&' and token != '$':
+                        challenger_tokens = challenger_tokens + 1
+                if challenger_tokens > best_tokens:
+                    best_currently = tag
+                    best_tokens = challenger_tokens
+            return best_currently
+
 
     def how_many_generations(self):
         temp_node = self
@@ -401,9 +452,9 @@ class TagNode(TreeNode):
             return None
         tags = self._tag.split(':')
         graphics = graphics_node._tag.split(':')
-        tag_template = self._template.get_template_match(self._tag)[0]
+        tag_template = self._template.get_template_match(self._tag)
         merged = []
-        graphics_template = self._template.get_template_match(graphics_node._tag)[0]
+        graphics_template = self._template.get_template_match(graphics_node._tag)
         #    print("Graphics cannot be applied from",graphics_node._tag,"onto",self._tag)
 
         for ii in range(0,len(tag_template)):
@@ -411,6 +462,8 @@ class TagNode(TreeNode):
                 if verbose:
                     print("Graphics cannot be applied from",graphics_node._tag,"onto",self._tag,"because their templates do not match.")
             elif tag_template[ii] != '&' and tag_template[ii] != '?':
+                if len(tags) != len(graphics) or ii >= len(tags):
+                    print("debug")
                 if tags[ii] != graphics[ii]:
                     if verbose:
                         print("Tags are not compatible because token",ii,"does not match. Target:",tags[ii]," Graphics:",graphics[ii])
@@ -430,25 +483,27 @@ class TagNode(TreeNode):
     # def compatible_with(self, graphics_tag_node):
     #    return self._template.resolve(self._tag,graphics_tag_node._tag) != None
 
+    # TODO: Not getting the pattern properly, it's giving the un-patterned version
     def get_pattern(self):
         verbose = config.properties[config.DEBUG][1]
         if self._pattern == None:
             to_return = self._tag.split(':')
             tag_tokens = self._tag.split(':')
             template_possibilities = self._template.get_template_match(self._tag)
-            if len(template_possibilities) != 1:
-                if verbose:
-                    print("Tag",self._tag,"has",len(template_possibilities),"possible configurations:")
-                    for config_ in template_possibilities:
-                        print(config_,', ')
-            else:
-                for ii in range(0,len(tag_tokens)):
-                    if template_possibilities[0][ii] in [tag_tokens[ii],'$']:
-                        to_return[ii] = tag_tokens[ii]
-                    elif template_possibilities[0][ii] in ['?','&']:
-                        to_return[ii] = template_possibilities[0][ii]
-                    elif verbose:
-                        print("Tag does not match its own template!! Tag:",self._tag,"; Template:",self._template._template_tag)
+            #if len(template_possibilities) != 1:
+                #if verbose:
+                #    print("Tag",self._tag,"has",len(template_possibilities),"possible configurations:")
+                #    for config_ in template_possibilities:
+                #        print(config_,', ')
+            #    pass
+            #else:
+            for ii in range(0,len(tag_tokens)):
+                if template_possibilities[ii] in [tag_tokens[ii],'$']:
+                    to_return[ii] = tag_tokens[ii]
+                elif template_possibilities[ii] in ['?','&']:
+                    to_return[ii] = template_possibilities[ii]
+                elif verbose:
+                    print("Tag does not match its own template!! Tag:",self._tag,"; Template:",self._template._tag)
             self._pattern = ":".join(to_return)
         return self._pattern
 
@@ -456,7 +511,7 @@ class TagNode(TreeNode):
         return self._template == other_tag._template and self.get_pattern() == other_tag.get_pattern()
     
     def is_graphics_tag(self):
-        return self._template._is_graphics_tag
+        return self._template.is_graphics_tag()
 
 class BoundNode(TreeNode):
     def __init__(self,target_node,graphics_node,parent=None):
@@ -508,6 +563,11 @@ class BoundNode(TreeNode):
         if self._parent != None:
             to_return.extend(self._parent.pop_addl())
         return to_return
+    
+    def reset_addl(self):
+        self._are_addl_popped = False
+        for child in self._children.keys():
+            self._children[child].reset_addl()
 
     def get_merged(self):
         return self._target_node.apply_graphics(self._graphics_node)
@@ -520,7 +580,7 @@ class BoundNode(TreeNode):
             if self._popped_children[target_tag] and verbose:
                 print("Popping tag that has already been popped:",target_tag,"child of",self._tag)
 
-            self._popped_children[target_tag] = True
+            #self._popped_children[target_tag] = True
             return self._children[target_tag]
         
     def pop_self(self):

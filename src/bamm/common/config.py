@@ -42,8 +42,8 @@ def load_run_config():
     global properties
     for line in runconfig_file:
         uncommented = line.strip().split('#')[0]
-        props = uncommented.split('=')
-        if len(props) == 0:
+        props = uncommented.strip().split('=')
+        if len(props) == 0 or (len(props) == 1 and len(props[0]) == 0):
             continue
         elif len(props) != 2:
             print('Line "',line,'" in ',runconfig,' is improperly configured. Please format properties thus: "propertyname=value" (without quotes).')
