@@ -18,7 +18,7 @@ def default_setup():
     graphics.load_all_templates(config.properties[config.TEMPLATEFILE][1])
     
 def default_gen_new_raws():
-    graphics_tags_by_file = graphics.walk_rawfiles_into_tagnode_collection(config.properties[config.GRAPHICS_SOURCEDIR][1])
-    target_tags_by_file = graphics.walk_rawfiles_into_tagnode_collection(config.properties[config.TARGETDIR][1])
-    tags_to_apply = graphics.bind_graphics_to_targets(graphics_tags_by_file, target_tags_by_file)
+    graphics_tags_by_file = graphics.TagNode.walk_rawfiles_into_tagnode_collection(config.properties[config.GRAPHICS_SOURCEDIR][1])
+    target_tags_by_file = graphics.TagNode.walk_rawfiles_into_tagnode_collection(config.properties[config.TARGETDIR][1])
+    tags_to_apply = graphics.BoundNode.bind_graphics_to_targets(graphics_tags_by_file, target_tags_by_file)
     graphics.write_modified_raws(tags_to_apply,config.properties[config.TARGETDIR][1],config.properties[config.OUTPUTDIR][1])

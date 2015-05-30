@@ -14,7 +14,7 @@ Button's Automated Mod Merger for Dwarf Fortress
 * Merges of content as well as graphics.
 
 #####Limitations:
-* If you have two files with the same name, you're gonna have a bad time.
+* If you have two files with the same name in your graphics directory, you're gonna have a bad time.
  
 ###TO RUN
 

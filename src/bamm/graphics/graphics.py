@@ -67,8 +67,8 @@ def write_modified_raws(graphics_to_apply, raws_sourcedir, outputdir):
                 if verbose:
                     print(file,"copied.")
             # TODO: Need to implement graphics overwrites
-            elif parsing.path_compatible(targetpath,properties[config.GRAPHICS_OVERWRITE_LIST][1:]):
-                pass
+            #elif parsing.path_compatible(targetpath,properties[config.GRAPHICS_OVERWRITE_LIST][1:]):
+            #    pass
             else:
                 if verbose:
                     print("Merging graphics into",file,"...")
@@ -129,94 +129,18 @@ def write_modified_raws(graphics_to_apply, raws_sourcedir, outputdir):
     if verbose:
         print("All files written.")
         
-def copy_graphics_overrides(graphics_directory, output_directory):
+def find_graphics_overrides(graphics_directory, graphics_overwrites):
     verbose = config.properties[config.DEBUG][1]
-    properties = config.properties
+    to_return = []
     if verbose:
-        print("Writing graphics override files")
+        print("Locating graphics override files")
     for root, dirs, files in os.walk(graphics_directory):
         for file in files:
             filepath = os.path.join(root,file)
-            
-        
-
-def walk_rawfiles_into_tagnode_collection(directory):
-    """Load the graphics-relevant content of raw files into memory.
-    
-    directory is a directory containing the raw files you want to load into memory. None of the files may have duplicate names, even if they're in different sub-folders.
-    
-    The function returns a dictionary of string:dict{string:TagNode}. The outer key is a filename which contains some graphics-relevant content. The inner key is the tag corresponding with a top-level TagNode in that file, and maps to that TagNode.
-    
-    This format is the expected input format of both parameters of bind_graphics_to_targets(graphics_nodes,target_nodes).
-    """
-    verbose = config.properties[config.DEBUG][1]
-    node_collection = {}
-    for root, dirs, files in os.walk(directory):
-        for rawfile in files:
-            # Only look at .txt files
-            if '.txt' not in rawfile:
-                if verbose:
-                    print("Skipping file",rawfile,"...")
-                continue
-            if verbose:
-                print("Loading graphics tags from",rawfile,"...")
-            global template_tree
-            # curr_template_node keeps track of what format of tag we've most recently seen, and thus what's valid next
-            curr_template_node = template_tree
-            # curr_real_node keeps track of the tag we stored that corresponds to the most local instance of curr_template_node.
-            curr_real_node = None
-            tarpath = os.path.join(root, rawfile)
-            openfile = open(tarpath,encoding='cp437')
-            for line in openfile:
-                for tag in parsing.tags(line):
-                    matching_node = curr_template_node.find_match(tag)
-                    if matching_node != None:
-                        curr_template_node = matching_node
-                        if curr_real_node == None or matching_node._tag in template_tree._children:
-                            curr_real_node = TagNode(rawfile,matching_node,tag)
-                        else:
-                            while curr_real_node != None and matching_node._tag not in curr_real_node._template._children:
-                                curr_real_node = curr_real_node._parent
-                            curr_real_node = TagNode(rawfile,matching_node,tag,curr_real_node)
-                        if rawfile not in node_collection:
-                            node_collection[rawfile] = { }
-                        if curr_real_node._parent == None:
-                            node_collection[rawfile][tag] = curr_real_node
-
-            openfile.close()
-            if verbose:
-                print("Finished processing",rawfile,".")
-    return node_collection
-
-def bind_graphics_to_targets(graphics_nodes,targets_nodes):
-    """Associate two collections of TagNodes with each other, in preparation for merging.
-    
-    graphics_nodes and targets_nodes are dicts of type string:dict{string:TagNode}, where the outer key is a file name, the inner keys are tags associated with top-level TagNodes, and the TagNodes are of course those same top-level TagNodes. These string:string:TagNodes are expected to be produced by walk_rawfiles_into_tagnode_collection. 
-    
-    The function returns a similarly-formatted dict of BoundNodes, in the format string:dict{string:BoundNode}, where the outer key is a file name, the inner key is the tag associated with the target_nodes of top level BoundNodes, and the BoundNodes are, as usual, those BoundNodes.
-    
-    The BoundNodes in the return dict are generated from the two arguments, by matching up TagNodes from graphics_nodes and targets_nodes based on their filenames, templates, and parents. If a TagNode in either argument has no corresponding TagNode in the other, it is dropped if it has children or non-graphical content. If neither of those is the case, it's saved as an "additional" graphics tag to be added or removed in the conversion.
-    """
-    verbose = config.properties[config.DEBUG][1]
-    if verbose:
-        print("Binding graphics source tags to target tags...")
-    to_return = {}
-    for filename in targets_nodes.keys():
-        # Files which both share, both have found graphics in, and haven't been put in the return dict yet.
-        if filename in graphics_nodes.keys() and filename not in to_return.keys():
-            if verbose:
-                print("Binding tags for",filename,"...")
-            to_return[filename] = {} 
-            for top_level_tag in targets_nodes[filename].keys():
-                # Top level tags which both share, both have found graphics in, and haven't been put in the return dict yet.
-                if top_level_tag in graphics_nodes[filename] and top_level_tag not in to_return[filename].keys():
-                    # Create new BoundNode tree and put it in the return dict.
-                    to_return[filename][top_level_tag] = BoundNode(targets_nodes[filename][top_level_tag],graphics_nodes[filename][top_level_tag])
-            if verbose:
-                print(filename,"tags bound.")
-    if verbose:
-        print("Tag binding complete.")
+            if parsing.path_compatible(filepath,graphics_overwrites):
+                to_return.append(filepath)
     return to_return
+            
 
 class TreeNode():
     """Parent class for the other Node classes.
@@ -228,17 +152,17 @@ class TreeNode():
         self._tag = The string that this node represents. This should be overridden and re-defined by subclasses.
         self._children = A dict of type string:TreeNode, where the key is the child's ._tag property. 
     """
-    
+
     def __init__(self,parent=None):
         self._parent = parent
         self._children = {}
         self._tag = None
         #if parent != None:
         #    parent.add_child(self)
-        
+
     def add_child(self, child_node):
         self._children[child_node._tag] = child_node
-    
+
     def find_match(self, tag):
         curr_node = self
         matching_node = None
@@ -252,13 +176,12 @@ class TreeNode():
             else:
                 curr_node = curr_node._parent
         return matching_node
-    
+
     def get_child(self, tag):
         if tag in self._children.keys():
             return self._children[tag]
         else:
             return None
-        
 
 class TemplateNode(TreeNode):
 
@@ -288,7 +211,7 @@ class TemplateNode(TreeNode):
 
             parent.add_child(self)
             
-    def is_graphics_tag(self):
+    def is_standalone_tag(self):
         return '$' not in self._tag and '&' not in self._tag and self._is_graphics_tag
 
     def add_child(self, node):
@@ -417,7 +340,6 @@ class TemplateNode(TreeNode):
                     best_tokens = challenger_tokens
             return best_currently
 
-
     def how_many_generations(self):
         temp_node = self
         count = -1
@@ -510,8 +432,57 @@ class TagNode(TreeNode):
     def aligns_with(self,other_tag):
         return self._template == other_tag._template and self.get_pattern() == other_tag.get_pattern()
     
-    def is_graphics_tag(self):
-        return self._template.is_graphics_tag()
+    def is_standalone_tag(self):
+        return self._template.is_standalone_tag()
+
+    @staticmethod    
+    def walk_rawfiles_into_tagnode_collection(directory):
+        """Load the graphics-relevant content of raw files into memory.
+        
+        directory is a directory containing the raw files you want to load into memory. None of the files may have duplicate names, even if they're in different sub-folders.
+        
+        The function returns a dictionary of string:dict{string:TagNode}. The outer key is a filename which contains some graphics-relevant content. The inner key is the tag corresponding with a top-level TagNode in that file, and maps to that TagNode.
+        
+        This format is the expected input format of both parameters of bind_graphics_to_targets(graphics_nodes,target_nodes).
+        """
+        verbose = config.properties[config.DEBUG][1]
+        node_collection = {}
+        for root, dirs, files in os.walk(directory):
+            for rawfile in files:
+                # Only look at .txt files
+                if '.txt' not in rawfile:
+                    if verbose:
+                        print("Skipping file",rawfile,"...")
+                    continue
+                if verbose:
+                    print("Loading graphics tags from",rawfile,"...")
+                global template_tree
+                # curr_template_node keeps track of what format of tag we've most recently seen, and thus what's valid next
+                curr_template_node = template_tree
+                # curr_real_node keeps track of the tag we stored that corresponds to the most local instance of curr_template_node.
+                curr_real_node = None
+                tarpath = os.path.join(root, rawfile)
+                openfile = open(tarpath,encoding='cp437')
+                for line in openfile:
+                    for tag in parsing.tags(line):
+                        matching_node = curr_template_node.find_match(tag)
+                        if matching_node != None:
+                            curr_template_node = matching_node
+                            if curr_real_node == None or matching_node._tag in template_tree._children:
+                                curr_real_node = TagNode(rawfile,matching_node,tag)
+                            else:
+                                while curr_real_node != None and matching_node._tag not in curr_real_node._template._children:
+                                    curr_real_node = curr_real_node._parent
+                                curr_real_node = TagNode(rawfile,matching_node,tag,curr_real_node)
+                            if rawfile not in node_collection:
+                                node_collection[rawfile] = { }
+                            if curr_real_node._parent == None:
+                                node_collection[rawfile][tag] = curr_real_node
+    
+                openfile.close()
+                if verbose:
+                    print("Finished processing",rawfile,".")
+        return node_collection
 
 class BoundNode(TreeNode):
     def __init__(self,target_node,graphics_node,parent=None):
@@ -539,12 +510,12 @@ class BoundNode(TreeNode):
             new_node.create_child_nodes()
         # Children with pattern keys in target but not in graphics
         for target_key in set(self._target_node._pat_children.keys()) - set(self._graphics_node._pat_children.keys()):
-            if self._target_node._pat_children[target_key].is_graphics_tag() and not ('&' in self._target_node._template._tag or '$' in self._target_node._template._tag):
+            if self._target_node._pat_children[target_key].is_standalone_tag() and not ('&' in self._target_node._template._tag or '$' in self._target_node._template._tag):
                 self.add_child(BoundNode(self._target_node._pat_children[target_key],None,self))
         # Children with pattern keys in graphics but not in target
         for graphics_key in set(self._graphics_node._pat_children.keys()) - set(self._target_node._pat_children.keys()):
             graphics_in_question = self._graphics_node._pat_children[graphics_key]
-            if graphics_in_question.is_graphics_tag():
+            if graphics_in_question.is_standalone_tag():
                 self._additional.append(graphics_in_question)
         # End
 
@@ -582,7 +553,7 @@ class BoundNode(TreeNode):
 
             #self._popped_children[target_tag] = True
             return self._children[target_tag]
-        
+    
     def pop_self(self):
         verbose = config.properties[config.DEBUG][1]
         if self._parent != None:
@@ -598,3 +569,34 @@ class BoundNode(TreeNode):
             return False
         else:
             return True
+        
+    @staticmethod
+    def bind_graphics_to_targets(graphics_nodes,targets_nodes):
+        """Associate two collections of TagNodes with each other, in preparation for merging.
+        
+        graphics_nodes and targets_nodes are dicts of type string:dict{string:TagNode}, where the outer key is a file name, the inner keys are tags associated with top-level TagNodes, and the TagNodes are of course those same top-level TagNodes. These string:string:TagNodes are expected to be produced by walk_rawfiles_into_tagnode_collection. 
+        
+        The function returns a similarly-formatted dict of BoundNodes, in the format string:dict{string:BoundNode}, where the outer key is a file name, the inner key is the tag associated with the target_nodes of top level BoundNodes, and the BoundNodes are, as usual, those BoundNodes.
+        
+        The BoundNodes in the return dict are generated from the two arguments, by matching up TagNodes from graphics_nodes and targets_nodes based on their filenames, templates, and parents. If a TagNode in either argument has no corresponding TagNode in the other, it is dropped if it has children or non-graphical content. If neither of those is the case, it's saved as an "additional" graphics tag to be added or removed in the conversion.
+        """
+        verbose = config.properties[config.DEBUG][1]
+        if verbose:
+            print("Binding graphics source tags to target tags...")
+        to_return = {}
+        for filename in targets_nodes.keys():
+            # Files which both share, both have found graphics in, and haven't been put in the return dict yet.
+            if filename in graphics_nodes.keys() and filename not in to_return.keys():
+                if verbose:
+                    print("Binding tags for",filename,"...")
+                to_return[filename] = {} 
+                for top_level_tag in targets_nodes[filename].keys():
+                    # Top level tags which both share, both have found graphics in, and haven't been put in the return dict yet.
+                    if top_level_tag in graphics_nodes[filename] and top_level_tag not in to_return[filename].keys():
+                        # Create new BoundNode tree and put it in the return dict.
+                        to_return[filename][top_level_tag] = BoundNode(targets_nodes[filename][top_level_tag],graphics_nodes[filename][top_level_tag])
+                if verbose:
+                    print(filename,"tags bound.")
+        if verbose:
+            print("Tag binding complete.")
+        return to_return
