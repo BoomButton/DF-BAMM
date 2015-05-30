@@ -1,7 +1,4 @@
-resources/graphics_source_directory/*
-resources/graphics_output_directory/*
-resources/raws_source_directory/*
-resources/raws_output_directory/*
+resources/*/*
 *.pyc
 *.project
 *.pydevproject
