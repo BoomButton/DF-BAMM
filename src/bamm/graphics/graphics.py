@@ -108,6 +108,12 @@ def write_modified_raws(graphics_to_apply, raws_sourcedir, outputdir):
                                 #modified_line = modified_line[:-1] + " (BAMM)\n"
                             additional.extend(matching_node.pop_addl())
                             tags_to_reset_addl.append(matching_node)
+                        # Targets without matching graphics
+                        elif curr_node is not None:
+                            problem_parent = curr_node.find_targetsonly_owner(tag)
+                            if problem_parent is not None:
+                                if problem_parent._targets_only[tag].has_graphics_info():
+                                    modified_line = "No tag corresponding to ("+tag+") was found in graphics source. -BAMM\n" + modified_line
                     
                     targetfile.writelines(modified_line)
                     for tag_node in additional:
@@ -263,7 +269,6 @@ class TemplateNode(TreeNode):
         candidate_tokens = tag_to_compare.split(':')
 
         ii = 0
-        # TODO: Need to check more than just the first tag in the bag's length
         while len(template_token_bag) > 0 and (ii < len(candidate_tokens) or ii < len(template_token_bag[0])):
             good_to_go = False
             for var in template_token_bag:
@@ -401,11 +406,6 @@ class TagNode(TreeNode):
 
         return ":".join(merged)
 
-    # Too much work
-    # def compatible_with(self, graphics_tag_node):
-    #    return self._template.resolve(self._tag,graphics_tag_node._tag) != None
-
-    # TODO: Not getting the pattern properly, it's giving the un-patterned version
     def get_pattern(self):
         verbose = config.properties[config.DEBUG][1]
         if self._pattern == None:
@@ -434,6 +434,17 @@ class TagNode(TreeNode):
     
     def is_standalone_tag(self):
         return self._template.is_standalone_tag()
+    
+    def is_graphics_tag(self):
+        return self._template._is_graphics_tag
+    
+    def has_graphics_info(self):
+        to_return = self.is_graphics_tag()
+        for child in self._children.keys():
+            to_return |= self._children[child].has_graphics_info()
+            if to_return:
+                break
+        return to_return
 
     @staticmethod    
     def walk_rawfiles_into_tagnode_collection(directory):
@@ -490,6 +501,7 @@ class BoundNode(TreeNode):
         self._tag = target_node._tag
         self._popped_children = {}
         self._additional = []
+        self._targets_only = {}
         self._are_addl_popped = False
         self._target_node = target_node
         self._graphics_node = graphics_node
@@ -501,6 +513,11 @@ class BoundNode(TreeNode):
     def add_child(self, child_node):
         self._children[child_node._target_node._tag]=child_node
         self._popped_children[child_node._target_node._tag]=False
+        
+    def is_graphics_tag(self):
+        if self._target_node.is_graphics_tag() != self._graphics_node.is_graphics_tag():
+            print("Problem in BoundNode.is_graphics_tag for BoundNode",self._tag)
+        return self._target_node.is_graphics_tag()
 
     def create_child_nodes(self):
         # Children with pattern keys in both target & graphics
@@ -510,8 +527,11 @@ class BoundNode(TreeNode):
             new_node.create_child_nodes()
         # Children with pattern keys in target but not in graphics
         for target_key in set(self._target_node._pat_children.keys()) - set(self._graphics_node._pat_children.keys()):
-            if self._target_node._pat_children[target_key].is_standalone_tag() and not ('&' in self._target_node._template._tag or '$' in self._target_node._template._tag):
-                self.add_child(BoundNode(self._target_node._pat_children[target_key],None,self))
+            target_in_question = self._target_node._pat_children[target_key] 
+            if target_in_question.is_standalone_tag():  # and not ('&' in self._target_node._template._tag or '$' in self._target_node._template._tag):
+                self.add_child(BoundNode(target_in_question,None,self))
+            else: #if self._target_node._pat_children[target_key].is_graphics_tag():
+                self._targets_only[target_in_question._tag] = target_in_question
         # Children with pattern keys in graphics but not in target
         for graphics_key in set(self._graphics_node._pat_children.keys()) - set(self._target_node._pat_children.keys()):
             graphics_in_question = self._graphics_node._pat_children[graphics_key]
@@ -569,6 +589,14 @@ class BoundNode(TreeNode):
             return False
         else:
             return True
+        
+    def find_targetsonly_owner(self, target_tag):
+        if target_tag in self._targets_only:
+            return self
+        elif self._parent is not None:
+            return self._parent.find_targetsonly_owner(target_tag)
+        else:
+            return None
         
     @staticmethod
     def bind_graphics_to_targets(graphics_nodes,targets_nodes):
