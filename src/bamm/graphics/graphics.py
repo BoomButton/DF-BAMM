@@ -492,7 +492,7 @@ class TagNode(TreeNode):
         return to_return
 
     @staticmethod
-    def walk_rawfiles_into_tagnode_collection(directory, node_collection={}):
+    def walk_rawfiles_into_tagnode_collection(directory, node_collection=None):
         """Load the graphics-relevant content of raw files into memory.
 
         * directory is a directory containing the raw files you want to load
@@ -510,6 +510,8 @@ class TagNode(TreeNode):
         This format is the expected input format of both parameters of
         bind_graphics_to_targets(graphics_nodes, target_nodes).
         """
+        if node_collection is None:
+            node_collection = {}
 
         for root, dirs, files in os.walk(directory):
             for rawfile in files:
