@@ -201,12 +201,9 @@ class TreeNode():
         curr_node = self
         matching_node = None
         out_of_parents = False
-        while matching_node is not None and not out_of_parents:
+        while matching_node is None and curr_node is not None:
             matching_node = curr_node.get_child(tag)
-            if curr_node._parent is not None:
-                out_of_parents = True
-            else:
-                curr_node = curr_node._parent
+            curr_node = curr_node._parent
         return matching_node
 
     # TODO docstring
@@ -217,9 +214,9 @@ class TreeNode():
             return None
 
 
+# TODO docstring
 class TemplateNode(TreeNode):
 
-    # TODO docstring
     # self._tag #string
     # self._children    # dict of TemplateNodes
     # self._childref        dict of lists of TemplateNodes where the key is
@@ -495,12 +492,15 @@ class TagNode(TreeNode):
         return to_return
 
     @staticmethod
-    def walk_rawfiles_into_tagnode_collection(directory):
+    def walk_rawfiles_into_tagnode_collection(directory, node_collection={}):
         """Load the graphics-relevant content of raw files into memory.
 
         * directory is a directory containing the raw files you want to load
         into memory. Files with duplicate names will be treated as the same
         file, even if they're in different sub-folders.
+        * node_collection is an optional parameter, to let you add additional
+        raw files to the same node_collection. It is formatted the same as the
+        return dict.
 
         The function returns a dictionary of string:dict{string:TagNode}. The
         outer key is a filename which contains some graphics-relevant content.
@@ -510,7 +510,7 @@ class TagNode(TreeNode):
         This format is the expected input format of both parameters of
         bind_graphics_to_targets(graphics_nodes, target_nodes).
         """
-        node_collection = {}
+
         for root, dirs, files in os.walk(directory):
             for rawfile in files:
                 # Only look at .txt files
