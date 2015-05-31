@@ -4,10 +4,11 @@ from src.bamm.common import config, parsing
 
 template_tree = None
 
+userlog = config.userlog
+modderslog = config.modderslog
+
 def load_all_templates(templatefile):
-    verbose = config.properties[config.DEBUG][1]
-    if verbose:
-        print("Loading template configuration...")
+    userlog.info("Loading template configuration...")
     alltemplates = open(templatefile,'r')
     global template_tree
     if template_tree is None:
@@ -18,7 +19,6 @@ def load_all_templates(templatefile):
         # Starting at the root of the tree with each newline
         curr_node = template_tree
         if len(real_line) > 0:
-            # TODO continue
             tags = real_line.split('|')
             for tag in tags:
                 if tag in curr_node._children.keys():
@@ -28,8 +28,7 @@ def load_all_templates(templatefile):
                     
             curr_node._is_graphics_tag = True
     alltemplates.close()
-    if verbose:
-        print("Template configuration loaded.")
+    userlog.info("Template configuration loaded.")
 
 def write_modified_raws(graphics_to_apply, raws_sourcedir, outputdir):
     """Write the full modified raws to the raw output directory.
@@ -44,34 +43,28 @@ def write_modified_raws(graphics_to_apply, raws_sourcedir, outputdir):
         * If it finds the filename in graphics_to_apply's keyset, it opens the file in the target raw source directory, creates and opens a corresponding file in the raw output directory, and walks through the target raw source file a line at a time, constructing the modified file.
     """
     
-    verbose = config.properties[config.DEBUG][1]
     properties = config.properties
-    if verbose:
-        print("Writing modified raws...")
+    userlog.info("Writing modified raws...")
     for root, dirs, files in os.walk(raws_sourcedir):
         # Create directories so we don't have any issues later on
         for dir in dirs:
             targetdir = os.path.join(root,dir)
             targetdir = outputdir + targetdir[len(raws_sourcedir):]
             if not os.path.exists(targetdir):
-                if verbose:
-                    print("Creating output directory",dir)
+                userlog.info("Creating output directory %s",dir)
                 os.mkdir(targetdir)
         for file in files:
             targetpath = os.path.join(root,file)
             targetpath = outputdir + targetpath[len(raws_sourcedir):]
             if parsing.path_compatible(targetpath,properties[config.GRAPHICS_IGNORE_LIST][1:]) or file not in graphics_to_apply.keys():
-                if verbose:
-                    print("Copying",file,"from target source...")
+                userlog.info("Copying %s from target source...",file)
                 targetpath = shutil.copyfile(os.path.join(root,file),targetpath)
-                if verbose:
-                    print(file,"copied.")
+                userlog.info("%s copied.",file)
             # TODO: Need to implement graphics overwrites
             #elif parsing.path_compatible(targetpath,properties[config.GRAPHICS_OVERWRITE_LIST][1:]):
             #    pass
             else:
-                if verbose:
-                    print("Merging graphics into",file,"...")
+                userlog.info("Merging graphics into %s ...",file)
                 curr_dict = graphics_to_apply[file]
                 curr_node = None
                 targetfile = open(targetpath,'wt',encoding='cp437')
@@ -97,12 +90,10 @@ def write_modified_raws(graphics_to_apply, raws_sourcedir, outputdir):
                                 merged_tag = matching_node.get_merged()
                                 if merged_tag is not None:
                                     replacement = matching_node.get_merged()
-                                    if verbose:
-                                        print("Replacing",tag,"with",replacement,"at line",linecount,".")
+                                    userlog.debug("Replacing %s with %s at line %i.",tag,replacement,linecount)
                                     modified_line = modified_line.replace(tag,replacement)
                                 else:
-                                    if verbose:
-                                        print("Removing tag",tag,"at line",linecount,".")
+                                    userlog.debug("Removing tag %s at line %i.",tag,linecount)
                                     to_remove = "[" + tag + "]"
                                     modified_line = modified_line.replace(to_remove,"")
                                 #modified_line = modified_line[:-1] + " (BAMM)\n"
@@ -113,33 +104,29 @@ def write_modified_raws(graphics_to_apply, raws_sourcedir, outputdir):
                             problem_parent = curr_node.find_targetsonly_owner(tag)
                             if problem_parent is not None:
                                 if problem_parent._targets_only[tag].has_graphics_info():
+                                    modderslog.info("Object missing graphics information in %s : %s",targetpath,tag)
                                     modified_line = "No tag corresponding to ("+tag+") was found in graphics source. -BAMM\n" + modified_line
                     
                     targetfile.writelines(modified_line)
                     for tag_node in additional:
                         linecount = linecount + 1
-                        if verbose:
-                            print("Adding tag",tag_node._tag,"at line",linecount,".")
+                        userlog.debug("Adding tag %s at line %i.",tag_node._tag,linecount)
                         line_to_write = "[" + tag_node._tag + "]\n"# (BAMM)\n"
                         targetfile.writelines(line_to_write)
 
                 targetfile.flush()
-                if verbose:
-                    print("Finished outputting",file,".")
+                userlog.info("Finished outputting %s .",file)
                 targetfile.close()
                 sourcefile.close()
                 # Resetting the additional tags for another 
                 for node in tags_to_reset_addl:
                     node.reset_addl()
                 
-    if verbose:
-        print("All files written.")
+    userlog.info("All files written.")
         
 def find_graphics_overrides(graphics_directory, graphics_overwrites):
-    verbose = config.properties[config.DEBUG][1]
     to_return = []
-    if verbose:
-        print("Locating graphics override files")
+    userlog.info("Locating graphics override files")
     for root, dirs, files in os.walk(graphics_directory):
         for file in files:
             filepath = os.path.join(root,file)
@@ -232,7 +219,6 @@ class TemplateNode(TreeNode):
             return node
 
     def get_child(self, tag):
-        verbose = config.properties[config.DEBUG][1]
         if tag in self._children.keys():
             return self._children[tag]
         else:
@@ -249,10 +235,9 @@ class TemplateNode(TreeNode):
                     return None
                 else:
                     # TODO error handling
-                    if verbose:
-                        print("Found more than one matching child. Matching children are:")
-                        for poss in return_possibilities:
-                            print(poss[1])
+                    userlog.debug("Found more than one matching child. Matching children are:")
+                    for poss in return_possibilities:
+                        userlog.debug(poss[1])
                     possible_tags = [a[1] for a in return_possibilities]
                     winner = TemplateNode._get_best_match(possible_tags)
                     return return_possibilities[possible_tags.index(winner)][0]
@@ -261,7 +246,6 @@ class TemplateNode(TreeNode):
 
     # This tells if a single tag matches a single tag; that is, it assumes we've got one element of the |-separated list 
     def get_template_match(self, tag_to_compare):
-        verbose = config.properties[config.DEBUG][1]
         if self._tag == None:
             return None
         template_token_bag = []
@@ -311,18 +295,15 @@ class TemplateNode(TreeNode):
         if len(template_token_bag) == 0:
             return None
         elif len(template_token_bag) == 1:
-            if len(template_token_bag[0]) != len(candidate_tokens):
-                print("debug")
             return template_token_bag[0]
         else:
             # TODO error handling
 # TODO plant GROWTH_PRINTs are throwing this when they end and there are templates of size n and n+1, fix that up plz
             highest_priority = TemplateNode._get_best_match(template_token_bag)
-            if verbose:
-                print("More than one template matched.\nTag:",tag_to_compare,"Matches:")
-                for template in template_token_bag:
-                    print(template)
-                print("The highest-priority match is",highest_priority)
+            userlog.debug("More than one template matched.\nTag: %s Matches:",tag_to_compare)
+            for template in template_token_bag:
+                userlog.debug("\t%s",template)
+            userlog.debug("The highest-priority match is %s",highest_priority)
             # Technically this does in fact have a matching template
             return highest_priority
         
@@ -374,7 +355,6 @@ class TagNode(TreeNode):
         self._pat_children[child_tag_node.get_pattern()] = child_tag_node
 
     def apply_graphics(self, graphics_node):
-        verbose = config.properties[config.DEBUG][1]
         if graphics_node == None:
             return None
         tags = self._tag.split(':')
@@ -386,14 +366,10 @@ class TagNode(TreeNode):
 
         for ii in range(0,len(tag_template)):
             if tag_template[ii] != graphics_template[ii]:
-                if verbose:
-                    print("Graphics cannot be applied from",graphics_node._tag,"onto",self._tag,"because their templates do not match.")
+                userlog.error("Graphics cannot be applied from %s onto %s because their templates do not match.",graphics_node._tag,self._tag)
             elif tag_template[ii] != '&' and tag_template[ii] != '?':
-                if len(tags) != len(graphics) or ii >= len(tags):
-                    print("debug")
                 if tags[ii] != graphics[ii]:
-                    if verbose:
-                        print("Tags are not compatible because token",ii,"does not match. Target:",tags[ii]," Graphics:",graphics[ii])
+                    userlog.error("Tags are not compatible because token %i does not match. Target: %s Graphics: %s",ii,tags[ii],graphics[ii])
                 else:
                     merged.append(tags[ii])
             elif tag_template[ii] == '&':
@@ -401,13 +377,11 @@ class TagNode(TreeNode):
             elif tag_template[ii] == '?':
                 merged.append(graphics[ii])
             else:
-                if verbose:
-                    print("This block should never be reached. Big problem in TagNode.apply_graphics.")
+                userlog.error("This block should never be reached. Big problem in TagNode.apply_graphics.")
 
         return ":".join(merged)
 
     def get_pattern(self):
-        verbose = config.properties[config.DEBUG][1]
         if self._pattern == None:
             to_return = self._tag.split(':')
             tag_tokens = self._tag.split(':')
@@ -424,8 +398,8 @@ class TagNode(TreeNode):
                     to_return[ii] = tag_tokens[ii]
                 elif template_possibilities[ii] in ['?','&']:
                     to_return[ii] = template_possibilities[ii]
-                elif verbose:
-                    print("Tag does not match its own template!! Tag:",self._tag,"; Template:",self._template._tag)
+                else:
+                    userlog.error("Tag does not match its own template!! Tag: %s ; Template: %s",self._tag,self._template._tag)
             self._pattern = ":".join(to_return)
         return self._pattern
 
@@ -456,17 +430,14 @@ class TagNode(TreeNode):
         
         This format is the expected input format of both parameters of bind_graphics_to_targets(graphics_nodes,target_nodes).
         """
-        verbose = config.properties[config.DEBUG][1]
         node_collection = {}
         for root, dirs, files in os.walk(directory):
             for rawfile in files:
                 # Only look at .txt files
                 if '.txt' not in rawfile:
-                    if verbose:
-                        print("Skipping file",rawfile,"...")
+                    userlog.info("Skipping file %s...",rawfile)
                     continue
-                if verbose:
-                    print("Loading graphics tags from",rawfile,"...")
+                userlog.info("Loading graphics tags from %s...",rawfile)
                 global template_tree
                 # curr_template_node keeps track of what format of tag we've most recently seen, and thus what's valid next
                 curr_template_node = template_tree
@@ -491,8 +462,7 @@ class TagNode(TreeNode):
                                 node_collection[rawfile][tag] = curr_real_node
     
                 openfile.close()
-                if verbose:
-                    print("Finished processing",rawfile,".")
+                userlog.info("Finished processing %s .",rawfile)
         return node_collection
 
 class BoundNode(TreeNode):
@@ -516,7 +486,7 @@ class BoundNode(TreeNode):
         
     def is_graphics_tag(self):
         if self._target_node.is_graphics_tag() != self._graphics_node.is_graphics_tag():
-            print("Problem in BoundNode.is_graphics_tag for BoundNode",self._tag)
+            userlog.error("Problem in BoundNode.is_graphics_tag for BoundNode %s",self._tag)
         return self._target_node.is_graphics_tag()
 
     def create_child_nodes(self):
@@ -564,22 +534,20 @@ class BoundNode(TreeNode):
         return self._target_node.apply_graphics(self._graphics_node)
 
     def pop_child(self, target_tag):
-        verbose = config.properties[config.DEBUG][1]
         if target_tag not in self._children.keys():
             return self
         else:
-            if self._popped_children[target_tag] and verbose:
-                print("Popping tag that has already been popped:",target_tag,"child of",self._tag)
+            if self._popped_children[target_tag]:
+                userlog.warning("Popping tag that has already been popped: %s child of %s",target_tag,self._tag)
 
             #self._popped_children[target_tag] = True
             return self._children[target_tag]
     
     def pop_self(self):
-        verbose = config.properties[config.DEBUG][1]
         if self._parent != None:
             also_self = self._parent.pop_child(self._tag)
-            if also_self != self and verbose:
-                print("Big problem: Bound Node with _tag",self._tag,"is not its parent's ._children[",self._tag,"]")
+            if also_self != self:
+                userlog.error("Big problem: Bound Node with _tag %s is not its parent's ._children[%s]",self._tag,self._tag)
         return self
     
     def is_there_a_difference(self):
@@ -608,23 +576,18 @@ class BoundNode(TreeNode):
         
         The BoundNodes in the return dict are generated from the two arguments, by matching up TagNodes from graphics_nodes and targets_nodes based on their filenames, templates, and parents. If a TagNode in either argument has no corresponding TagNode in the other, it is dropped if it has children or non-graphical content. If neither of those is the case, it's saved as an "additional" graphics tag to be added or removed in the conversion.
         """
-        verbose = config.properties[config.DEBUG][1]
-        if verbose:
-            print("Binding graphics source tags to target tags...")
+        userlog.info("Binding graphics source tags to target tags...")
         to_return = {}
         for filename in targets_nodes.keys():
             # Files which both share, both have found graphics in, and haven't been put in the return dict yet.
             if filename in graphics_nodes.keys() and filename not in to_return.keys():
-                if verbose:
-                    print("Binding tags for",filename,"...")
+                userlog.info("Binding tags for %s ...",filename)
                 to_return[filename] = {} 
                 for top_level_tag in targets_nodes[filename].keys():
                     # Top level tags which both share, both have found graphics in, and haven't been put in the return dict yet.
                     if top_level_tag in graphics_nodes[filename] and top_level_tag not in to_return[filename].keys():
                         # Create new BoundNode tree and put it in the return dict.
                         to_return[filename][top_level_tag] = BoundNode(targets_nodes[filename][top_level_tag],graphics_nodes[filename][top_level_tag])
-                if verbose:
-                    print(filename,"tags bound.")
-        if verbose:
-            print("Tag binding complete.")
+                userlog.info("%s tags bound.",filename)
+        userlog.info("Tag binding complete.")
         return to_return

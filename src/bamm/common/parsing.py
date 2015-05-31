@@ -5,10 +5,12 @@ Created on May 21, 2015
 '''
 
 from src.bamm.common import config
-import os
 import re
 
 ascii_codes = None
+
+userlog = config.userlog
+modderslog = config.modderslog
 
 def _load_ascii_conversions(ascii_file):
     """Load ASCII conversions from file.
@@ -22,9 +24,7 @@ def _load_ascii_conversions(ascii_file):
     These conversions will later be used by the function escape_problematic_literals.
     """
     global ascii_codes
-    verbose = config.properties[config.DEBUG][1]
-    if verbose:
-        print("Loading ASCII conversions...")
+    userlog.info("Loading ASCII conversions...")
     if ascii_codes is None:
         ascii_codes = {}
     if ascii_file is None:
@@ -35,17 +35,14 @@ def _load_ascii_conversions(ascii_file):
             if len(real_line) == 0:
                 continue
             elif '=' not in real_line:
-                if verbose:
-                    print('ASCII conversion file contains the improperly-formatted line ',real_line,'.')
+                userlog.warning('ASCII conversion file contains the improperly-formatted line %s .',real_line)
             else:
                 point = real_line.rindex('=')
                 if real_line[:point] in ascii_codes.keys():
-                    if verbose:
-                        print('Duplicate entry for ascii replacement ',real_line[:point])
+                    userlog.warning('Duplicate entry for ascii replacement %s',real_line[:point])
                 else:
                     ascii_codes[real_line[:point]] = real_line[point+1:]
-        if verbose:
-            print("ASCII conversions loaded.")
+        userlog.info("ASCII conversions loaded.")
             
 def tags(line):
     """Return an ordered list of all the tags in this line, without brackets, with literals escaped if necessary."""
