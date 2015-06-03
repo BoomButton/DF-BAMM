@@ -128,6 +128,7 @@ def write_modified_raws(graphics_to_apply, raws_sourcedir, outputdir):
 
     properties = config.properties
     userlog.info("Writing modified raws...")
+    os.makedirs(outputdir, exist_ok=True)
     for root, dirs, files in os.walk(raws_sourcedir):
         # Create directories so we don't have any issues later on
         for _dir in dirs:
@@ -135,7 +136,7 @@ def write_modified_raws(graphics_to_apply, raws_sourcedir, outputdir):
             targetdir = outputdir + targetdir[len(raws_sourcedir):]
             if not os.path.exists(targetdir):
                 userlog.info("Creating output directory %s", _dir)
-                os.mkdir(targetdir)
+                os.makedirs(targetdir, exist_ok=True)
         for file in files:
             targetpath = os.path.join(root, file)
             targetpath = outputdir + targetpath[len(raws_sourcedir):]
