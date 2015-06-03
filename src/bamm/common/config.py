@@ -89,6 +89,11 @@ def load_run_config():
     modderslog.addHandler(modderhandler)
     modderslog.setLevel(logging.INFO)
 
+    consolehandler = logging.StreamHandler()
+    consolehandler.setFormatter(fmt)
+
+    userlog.addHandler(consolehandler)
+
     userlog.info("**********")
     modderslog.info("**********")
     userlog.info("Run configuration loaded.")
