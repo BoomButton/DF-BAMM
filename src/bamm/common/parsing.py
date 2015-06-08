@@ -72,8 +72,15 @@ def tags(line):
     return to_return
 
 
-# TODO docstring
 def escape_problematic_literals(line):
+    """ Returns line with its char literals replaced with their cp437 codes.
+
+    Char literals are usually used for defining tiles, and are two single
+    quotes around a character, so: '*'. Since this is the only case in which
+    the DF raw characters ']', '[' and ':' are allowed within a tag outside
+    their uses, and since cp437 codes are equally valid, replacing these with
+    their cp437 codes is harmless and streamlines lexing considerably.
+    """
     global ascii_codes
 
     # Replace literal key characters with number codes
@@ -108,7 +115,6 @@ def escape_problematic_literals(line):
     return line
 
 
-# TODO docstring
 def path_compatible(full_path, allowed_paths):
     """Return True if full_path regex matches anything in allowed_paths, or
     False otherwise."""

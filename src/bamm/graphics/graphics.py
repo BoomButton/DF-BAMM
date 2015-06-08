@@ -8,8 +8,17 @@ userlog = config.userlog
 modderslog = config.modderslog
 
 
-# TODO docstring
+# TODO overhaul.
 def load_all_templates(templatefile):
+    """ Loads config information from templatefile.
+
+    * templatefile is a pipe-delimited, one-graphics-tag-per-line config file
+    which should not be changed by users unless you REALLY know what you're
+    doing.
+
+    This initializes the scaffolding for all future raw parsing, which is
+    stored in graphics.template_tree .
+    """
     userlog.info("Loading template configuration...")
     alltemplates = open(templatefile, 'r')
     global template_tree
@@ -33,8 +42,25 @@ def load_all_templates(templatefile):
     userlog.info("Template configuration loaded.")
 
 
-# TODO docstring
+# TODO Maybe replace graphics_to_apply with curr_dict?
 def _apply_graphics_to_file(graphics_to_apply, file, sourceroot, targetpath):
+    """ Writes merged raws belonging to a single file.
+
+    * graphics_to_apply is a collection of BoundNode trees formatted as { file:
+    {topleveltag:BoundNode}}. This is the format returned by
+    BoundNode.bind_graphics_tags.
+    * file is the name of the file to apply graphics to, without any
+    information about its parent directories.
+    * sourceroot is the path to the directory containing the source raw version
+    of 'file'.
+    * targetpath is the path to the output file, with the name of the file
+    included.
+
+    For each line in the raw source file, the function searches BoundNode for a
+    matching tag for each tag. If the tag is found, its contents are replaced
+    in the line with a merged version from the appropriate BoundNode. Then the
+    line - modified or unmodified - is written out to the output file.
+    """
     userlog.info("Merging graphics into %s ...", file)
     curr_dict = graphics_to_apply[file]
     curr_node = None
@@ -160,7 +186,7 @@ def write_modified_raws(graphics_to_apply, raws_sourcedir, outputdir):
 
 
 # TODO implement
-# TODO docstring
+# TODO docstring (when method is finished)
 def find_graphics_overrides(graphics_directory, graphics_overwrites):
     to_return = []
     userlog.info("Locating graphics override files")
@@ -217,17 +243,68 @@ class TreeNode():
 
 # TODO docstring
 class TemplateNode(TreeNode):
+    """A TreeNode tailored for holding graphics templates.
 
-    # self._tag #string
-    # self._children    # dict of TemplateNodes
-    # self._childref        dict of lists of TemplateNodes where the key is
-    # the first token
-    # self._parent    # TemplateNode
-    # self._is_graphics_tag    # Boolean
+    TemplateNodes store the patterns which define what tags are graphics tags,
+    and which of their tokens are immutable, identifying, graphical, or
+    irrelevant. Each TemplateNode represents the template for a single type of
+    graphics tag.
 
-    # TODO docstring
+    Members:
+    * _tag is the template string. It is a series of tokens separated by
+    colons. Each token is one of the following:
+    * LITERAL. This is a string, usually in all caps, which must be present in
+    this exact form for a tag to match this template. The first token in a
+    template is always a literal. Enums (e.g. the PLANT_GROWTH timing values of
+    ALL and NONE) may simulated by splitting a template into multiple
+    templates, one for each enum, with the enum in question present as a
+    literal.
+    * VARIABLE. This is a single character, '?' '$' or '&' (quotes not present
+    in _tag).
+        * '?' indicates that this is a graphics token. When matching a tag to a
+        template, this can match any value. When merging occurs, this token's
+        value will come from the graphics source.
+        * '&' indicates that this is an info token. When matching a tag to a
+        template, this can match any value. When merging occurs, this token's
+        value will come from the raw source.
+        * '$' indicates that this is an identifier token. When matching a tag
+        to a template, this can match any value; but for two tags to match each
+        other, they must share the same values for all identifier tokens in
+        their template.
+    * VARIABLE RANGE. This is a variable character, followed by a range in
+    parentheses, e.g. ?(0,3). This means that the tag can contain 0-3
+    (inclusive) tokens in this position, all of which hold graphical
+    information. The second value is optional - if omitted, it means there is
+    no upper bound on how many tokens can be in this series.
+    For examples, please see graphics_templates.config . The string between
+    each pipe ( | ) is a valid TemplateNode._tag .
+    * _children is a dict containing the TemplateNodes representing the types
+    of tags which are allowed to be children of the type of tag represented by
+    this TemplateNode. The keys are the full _tags of the child TemplateNodes.
+    * _childref is the same as _children, but indexed by the first token (the
+    "value") of the child's _tag, instead of the full _tag. For convenience/
+    performance only.
+    * _parent is the TemplateNode representing the type of tag that the type of
+    tag this TemplateNode represents can be a child of.
+    * _is_graphics_tag is a boolean that lets us know if this tag is a graphics
+    tag, as opposed to a template included because it can have graphics
+    children. This is necessary because some graphics tags are composed of only
+    a single literal token.
+    """
+
     # string does not contain the character '|'.
     def __init__(self, parent, string=""):
+        """ Initializes a TemplateNode
+
+        Parameters:
+        * parent is the parent TemplateNode of this node, or None. If it is
+        None, this TemplateNode will replace the current global template_tree.
+        * string is the template-formatted string which will be this
+        TemplateNode's _tag.
+
+        After creating itself, if the parent isn't None, it adds itself to its
+        parent.
+        """
         TreeNode.__init__(self, parent)
         self._is_graphics_tag = False
         self._childref = {}
@@ -246,8 +323,8 @@ class TemplateNode(TreeNode):
 
             parent.add_child(self)
 
-    # TODO docstring
     def is_standalone_tag(self):
+        """ Returns True if this is a tag without any non-graphical information."""
         return ('$' not in self._tag
                 ) and '&' not in self._tag and self._is_graphics_tag
 
