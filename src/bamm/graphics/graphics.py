@@ -1,5 +1,6 @@
 import os
 import shutil
+import traceback
 from src.bamm.common import config, parsing
 
 template_tree = None
@@ -19,27 +20,35 @@ def load_all_templates(templatefile):
     This initializes the scaffolding for all future raw parsing, which is
     stored in graphics.template_tree .
     """
-    userlog.info("Loading template configuration...")
-    alltemplates = open(templatefile, 'r')
-    global template_tree
-    if template_tree is None:
-        # initialize the template tree
-        template_tree = TemplateNode(None)
-    for line in alltemplates:
-        real_line = line.strip()
-        # Starting at the root of the tree with each newline
-        curr_node = template_tree
-        if len(real_line) > 0:
-            tags = real_line.split('|')
-            for tag in tags:
-                if tag in curr_node._children.keys():
-                    curr_node = curr_node._children[tag]
-                else:
-                    curr_node = TemplateNode(curr_node, tag)
+    try:
+        userlog.info("Loading template configuration...")
+        alltemplates = open(templatefile, 'r')
+        global template_tree
+        if template_tree is None:
+            # initialize the template tree
+            template_tree = TemplateNode(None)
+        for line in alltemplates:
+            real_line = line.strip()
+            # Starting at the root of the tree with each newline
+            curr_node = template_tree
+            if len(real_line) > 0:
+                tags = real_line.split('|')
+                for tag in tags:
+                    if tag in curr_node._children.keys():
+                        curr_node = curr_node._children[tag]
+                    else:
+                        curr_node = TemplateNode(curr_node, tag)
 
-            curr_node._is_graphics_tag = True
-    alltemplates.close()
-    userlog.info("Template configuration loaded.")
+                curr_node._is_graphics_tag = True
+        alltemplates.close()
+        userlog.info("Template configuration loaded.")
+    except:
+        userlog.error("Exception in loading templates. " +
+                      "If you have made changes to " + templatefile +
+                      ", please restore it. " +
+                      "Otherwise, please contact a BAMM! developer.")
+        userlog.error(traceback.format_exc())
+        raise
 
 
 # TODO Maybe replace graphics_to_apply with curr_dict?
@@ -591,49 +600,55 @@ class TagNode(TreeNode):
         if node_collection is None:
             node_collection = {}
 
-        for root, dirs, files in os.walk(directory):
-            for rawfile in files:
-                # Only look at .txt files
-                if '.txt' not in rawfile:
-                    userlog.info("Skipping file %s...", rawfile)
-                    continue
-                userlog.info("Loading graphics tags from %s...", rawfile)
-                global template_tree
-                # curr_template_node keeps track of what format of tag we've
-                # most recently seen, and thus what's valid next
-                curr_template_node = template_tree
-                # curr_real_node keeps track of the tag we stored that
-                # corresponds to the most local instance of curr_template_node.
-                curr_real_node = None
-                tarpath = os.path.join(root, rawfile)
-                openfile = open(tarpath, encoding='cp437')
-                for line in openfile:
-                    for tag in parsing.tags(line):
-                        matching_node = curr_template_node.find_match(tag)
-                        if matching_node is not None:
-                            curr_template_node = matching_node
-                            if ((curr_real_node is None or
-                                 matching_node._tag in template_tree._children)):
-                                curr_real_node = TagNode(rawfile,
-                                                         matching_node,
-                                                         tag)
-                            else:
-                                while (curr_real_node is not None and
-                                       matching_node._tag not in
-                                       curr_real_node._template._children):
-                                    curr_real_node = curr_real_node._parent
-                                curr_real_node = TagNode(rawfile,
-                                                         matching_node,
-                                                         tag,
-                                                         curr_real_node)
-                            if rawfile not in node_collection:
-                                node_collection[rawfile] = {}
-                            if curr_real_node._parent is None:
-                                node_collection[rawfile][tag] = curr_real_node
+        try:
+            for root, dirs, files in os.walk(directory):
+                for rawfile in files:
+                    # Only look at .txt files
+                    if '.txt' not in rawfile:
+                        userlog.info("Skipping file %s...", rawfile)
+                        continue
+                    userlog.info("Loading graphics tags from %s...", rawfile)
+                    global template_tree
+                    # curr_template_node keeps track of what format of tag
+                    # we've most recently seen, and thus what's valid next
+                    curr_template_node = template_tree
+                    # curr_real_node keeps track of the tag we stored that
+                    # corresponds to the most local instance of
+                    # curr_template_node.
+                    curr_real_node = None
+                    tarpath = os.path.join(root, rawfile)
+                    openfile = open(tarpath, encoding='cp437')
+                    for line in openfile:
+                        for tag in parsing.tags(line):
+                            matching_node = curr_template_node.find_match(tag)
+                            if matching_node is not None:
+                                curr_template_node = matching_node
+                                if ((curr_real_node is None or
+                                     matching_node._tag in template_tree._children)):
+                                    curr_real_node = TagNode(rawfile,
+                                                             matching_node,
+                                                             tag)
+                                else:
+                                    while (curr_real_node is not None and
+                                           matching_node._tag not in
+                                           curr_real_node._template._children):
+                                        curr_real_node = curr_real_node._parent
+                                    curr_real_node = TagNode(rawfile,
+                                                             matching_node,
+                                                             tag,
+                                                             curr_real_node)
+                                if rawfile not in node_collection:
+                                    node_collection[rawfile] = {}
+                                if curr_real_node._parent is None:
+                                    node_collection[rawfile][tag] = curr_real_node
 
-                openfile.close()
-                userlog.info("Finished processing %s .", rawfile)
-        return node_collection
+                    openfile.close()
+                    userlog.info("Finished processing %s .", rawfile)
+        except:
+            userlog.error("Exception in loading raws.")
+            userlog.error(traceback.format_exc())
+        else:
+            return node_collection
 
 
 # TODO docstring

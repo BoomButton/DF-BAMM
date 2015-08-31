@@ -6,6 +6,7 @@ Created on May 21, 2015
 
 from src.bamm.common import config
 import re
+import traceback
 
 ascii_codes = None
 
@@ -32,10 +33,7 @@ def _load_ascii_conversions(ascii_file):
     userlog.info("Loading ASCII conversions...")
     if ascii_codes is None:
         ascii_codes = {}
-    if ascii_file is None:
-        print("Undefined ascii conversion file. Please add an 'ascii' property in",
-              config.runconfig, ".")
-    else:
+    try:
         for line in open(ascii_file):
             real_line = line.strip()
             if len(real_line) == 0:
@@ -51,6 +49,18 @@ def _load_ascii_conversions(ascii_file):
                 else:
                     ascii_codes[real_line[:point]] = real_line[point+1:]
         userlog.info("ASCII conversions loaded.")
+    except TypeError:
+        userlog.error("Undefined ascii conversion file. Please add an 'ascii'",
+                      "property in", config.runconfig, ".")
+        userlog.error(traceback.format_exc())
+        raise
+    except:
+        userlog.error("Problem loading ASCII conversions. " +
+                      "If you have made changes to " + ascii_file +
+                      ", please restore it. " +
+                      "Otherwise, please contact a BAMM! developer.")
+        userlog.error(traceback.format_exc())
+        raise
 
 
 def tags(line):
