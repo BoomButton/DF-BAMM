@@ -24,10 +24,16 @@ def default_gen_new_raws():
     graphics_tags_by_file = \
         graphics.TagNode.walk_rawfiles_into_tagnode_collection(
             config.properties[config.GRAPHICS_SOURCEDIR][1])
-    graphics_tags_by_file = \
-        graphics.TagNode.walk_rawfiles_into_tagnode_collection(
-            config.properties[config.EXTRA_GRAPHICS_SOURCEDIR][1],
-            graphics_tags_by_file)
+    
+    # Optional extra_graphics property
+    try:
+        dir = config.properties[config.EXTRA_GRAPHICS_SOURCEDIR][1]
+    except:
+        pass
+    else:
+        graphics_tags_by_file = \
+            graphics.TagNode.walk_rawfiles_into_tagnode_collection(dir, graphics_tags_by_file)
+
     target_tags_by_file = \
         graphics.TagNode.walk_rawfiles_into_tagnode_collection(
             config.properties[config.TARGETDIR][1])
